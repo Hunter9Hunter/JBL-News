@@ -9,7 +9,7 @@ from deep_translator import GoogleTranslator
 
 # ================== ตั้งค่า ==================
 TOKEN = os.getenv("DISCORD_TOKEN")                    # ← ใส่ Bot Token ตรงนี้
-CHANNEL_ID = 1547565598370824284                  # ช่องที่คุณให้มา
+CHANNEL_ID = 1547596723034132620               # ช่องที่คุณให้มา
 SEEN_FILE = "seen_links.json"
 
 # คำสำคัญสำหรับกรองข่าว BL
