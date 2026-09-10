@@ -1,0 +1,205 @@
+import discord
+from discord.ext import tasks
+import requests
+from bs4 import BeautifulSoup
+import json
+import os
+from datetime import datetime
+from deep_translator import GoogleTranslator
+
+# ================== ตั้งค่า ==================
+TOKEN = "os.getenv("DISCORD_TOKEN")"                    # ← ใส่ Bot Token ตรงนี้
+CHANNEL_ID = 1547565598370824284                  # ช่องที่คุณให้มา
+SEEN_FILE = "seen_links.json"
+
+# คำสำคัญสำหรับกรองข่าว BL
+KEYWORDS = ["BL", "実写化", "ボーイズラブ", "ボーイズ・ラブ", "ドラマ化", "実写ドラマ"]
+
+# ================== ฟังก์ชันแปลภาษา ==================
+def translate_to_thai(text: str) -> str:
+    if not text:
+        return ""
+    try:
+        text = text[:1200]
+        return GoogleTranslator(source='ja', target='th').translate(text)
+    except Exception as e:
+        print("แปลภาษาผิดพลาด:", e)
+        return "(แปลไม่สำเร็จ)"
+
+# ================== จัดการลิงก์ที่เคยโพสต์ ==================
+def load_seen():
+    if os.path.exists(SEEN_FILE):
+        with open(SEEN_FILE, "r", encoding="utf-8") as f:
+            return set(json.load(f))
+    return set()
+
+def save_seen(seen):
+    with open(SEEN_FILE, "w", encoding="utf-8") as f:
+        json.dump(list(seen), f, ensure_ascii=False, indent=2)
+
+# ================== ดึงข่าว ==================
+def get_news_from_modelpress():
+    news = []
+    try:
+        url = "https://mdpr.jp/drama"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        res = requests.get(url, headers=headers, timeout=15)
+        soup = BeautifulSoup(res.text, "html.parser")
+
+        for item in soup.select("li, article")[:12]:
+            a_tag = item.select_one("a")
+            if not a_tag:
+                continue
+            title = a_tag.get_text(strip=True)
+            link = a_tag.get("href")
+            if not title or not link:
+                continue
+            if not link.startswith("http"):
+                link = "https://mdpr.jp" + link
+
+            if not any(kw in title for kw in KEYWORDS):
+                continue
+
+            img = item.select_one("img")
+            image = None
+            if img:
+                image = img.get("src") or img.get("data-src")
+
+            news.append({
+                "title": title,
+                "link": link,
+                "image": image,
+                "source": "modelpress"
+            })
+    except Exception as e:
+        print("modelpress error:", e)
+    return news
+
+def get_news_from_oricon():
+    news = []
+    try:
+        url = "https://www.oricon.co.jp/news/"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        res = requests.get(url, headers=headers, timeout=15)
+        soup = BeautifulSoup(res.text, "html.parser")
+
+        for item in soup.select("div.news-item, li, article")[:10]:
+            a_tag = item.select_one("a")
+            if not a_tag:
+                continue
+            title = a_tag.get_text(strip=True)
+            link = a_tag.get("href")
+            if not title or not link:
+                continue
+            if not link.startswith("http"):
+                link = "https://www.oricon.co.jp" + link
+
+            if not any(kw in title for kw in KEYWORDS):
+                continue
+
+            img = item.select_one("img")
+            image = img.get("src") if img else None
+
+            news.append({
+                "title": title,
+                "link": link,
+                "image": image,
+                "source": "oricon"
+            })
+    except Exception as e:
+        print("oricon error:", e)
+    return news
+
+def get_news_from_yahoo():
+    news = []
+    try:
+        url = "https://news.yahoo.co.jp/search?p=BL+ドラマ+OR+実写化+BL&ei=UTF-8"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        res = requests.get(url, headers=headers, timeout=15)
+        soup = BeautifulSoup(res.text, "html.parser")
+
+        for item in soup.select("li, div.newsFeed_item")[:10]:
+            a_tag = item.select_one("a")
+            if not a_tag:
+                continue
+            title = a_tag.get_text(strip=True)
+            link = a_tag.get("href")
+            if not title or not link:
+                continue
+
+            if not any(kw in title for kw in KEYWORDS):
+                continue
+
+            img = item.select_one("img")
+            image = img.get("src") if img else None
+
+            news.append({
+                "title": title,
+                "link": link,
+                "image": image,
+                "source": "Yahoo News"
+            })
+    except Exception as e:
+        print("yahoo error:", e)
+    return news
+
+def get_all_news():
+    all_news = []
+    all_news.extend(get_news_from_modelpress())
+    all_news.extend(get_news_from_oricon())
+    all_news.extend(get_news_from_yahoo())
+    return all_news
+
+# ================== บอท Discord ==================
+intents = discord.Intents.default()
+client = discord.Client(intents=intents)
+
+@client.event
+async def on_ready():
+    print(f"✅ บอทออนไลน์แล้ว: {client.user}")
+    check_news.start()
+
+@tasks.loop(minutes=60)
+async def check_news():
+    channel = client.get_channel(CHANNEL_ID)
+    if channel is None:
+        print("❌ หา channel ไม่เจอ")
+        return
+
+    seen = load_seen()
+    news_list = get_all_news()
+    new_count = 0
+
+    for news in news_list:
+        if news["link"] in seen:
+            continue
+
+        title_th = translate_to_thai(news["title"])
+
+        embed = discord.Embed(
+            title=news["title"][:250],
+            url=news["link"],
+            description=f"**แปลไทย:**\n{title_th}",
+            color=0xFF69B4,
+            timestamp=datetime.now()
+        )
+        embed.set_footer(text=f"แหล่งข่าว: {news['source']} • BL News Bot")
+
+        if news.get("image"):
+            embed.set_image(url=news["image"])
+
+        await channel.send(embed=embed)
+        seen.add(news["link"])
+        new_count += 1
+
+    if new_count > 0:
+        save_seen(seen)
+        print(f"📢 โพสต์ข่าวใหม่ {new_count} ข่าว")
+    else:
+        print("ไม่มีข่าวใหม่ในรอบนี้")
+
+@check_news.before_loop
+async def before():
+    await client.wait_until_ready()
+
+client.run(TOKEN)
