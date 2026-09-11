@@ -222,10 +222,21 @@ def get_news_from_yahoo():
     return news
 
 def get_all_news():
+    modelpress_news = get_news_from_modelpress()
+    oricon_news = get_news_from_oricon()
+    yahoo_news = get_news_from_yahoo()
+
+    print(f"🔎 Modelpress: พบข่าวที่ผ่าน filter {len(modelpress_news)} ข่าว")
+    print(f"🔎 ORICON: พบข่าวที่ผ่าน filter {len(oricon_news)} ข่าว")
+    print(f"🔎 Yahoo: พบข่าวที่ผ่าน filter {len(yahoo_news)} ข่าว")
+
     all_news = []
-    all_news.extend(get_news_from_modelpress())
-    all_news.extend(get_news_from_oricon())
-    all_news.extend(get_news_from_yahoo())
+    all_news.extend(modelpress_news)
+    all_news.extend(oricon_news)
+    all_news.extend(yahoo_news)
+
+    print(f"📊 รวมทั้งหมด: {len(all_news)} ข่าว")
+
     return all_news
 
 # ================== บอท Discord ==================
