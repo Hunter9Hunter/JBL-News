@@ -106,6 +106,7 @@ def save_seen(seen):
 # ================== ดึงข่าว ==================
 def get_news_from_modelpress():
     news = []
+    seen_links = set()
 
     try:
         url = "https://mdpr.jp/drama/"
@@ -120,21 +121,60 @@ def get_news_from_modelpress():
 
         soup = BeautifulSoup(res.text, "html.parser")
 
-        # ดูลิงก์ที่หน้าเว็บส่งกลับมาจริง ๆ
-        all_links = soup.select("a[href]")
-        print(f"🔗 Modelpress all links: {len(all_links)}")
+        # Modelpress ใช้ URL ข่าวรูปแบบ /drama/เลขข่าว
+        all_links = soup.select('a[href^="/drama/"]')
 
-        for a_tag in all_links[:50]:
+        print(f"🔗 Modelpress drama links: {len(all_links)}")
+
+        for a_tag in all_links:
             title = a_tag.get_text(" ", strip=True)
             link = a_tag.get("href")
 
-            if title and link:
-                print(f"🔎 {title[:80]} | {link}")
+            if not title or not link:
+                continue
 
-        return news
+            # เอาเฉพาะ URL ข่าว เช่น /drama/4842422
+            article_id = link.replace("/drama/", "").strip("/")
+
+            if not article_id.isdigit():
+                continue
+
+            full_link = "https://mdpr.jp" + link
+
+            # ป้องกันข่าวเดียวกันถูกดึงซ้ำ
+            if full_link in seen_links:
+                continue
+
+            seen_links.add(full_link)
+
+            print(f"📰 Modelpress title: {title}")
+
+            # กรองเฉพาะข่าวที่มี keyword
+            if not any(kw in title for kw in KEYWORDS):
+                continue
+
+            # ดึงรูป
+            img = a_tag.select_one("img")
+            image = None
+
+            if img:
+                image = (
+                    img.get("src")
+                    or img.get("data-src")
+                    or img.get("data-original")
+                )
+
+            news.append({
+                "title": title,
+                "link": full_link,
+                "image": image,
+                "source": "modelpress"
+            })
 
     except Exception as e:
         print("modelpress error:", e)
+
+    print(f"✅ Modelpress: พบข่าวที่ผ่าน filter {len(news)} ข่าว")
 
     return news
 
