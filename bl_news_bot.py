@@ -180,70 +180,111 @@ def get_news_from_modelpress():
 
 def get_news_from_oricon():
     news = []
+    seen_links = set()
+
     try:
-        url = "https://www.oricon.co.jp/news/"
-        headers = {"User-Agent": "Mozilla/5.0"}
+        url = "https://www.oricon.co.jp/dramamovie/"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+
         res = requests.get(url, headers=headers, timeout=15)
+
+        print(f"🌐 ORICON status: {res.status_code}")
+        print(f"📄 ORICON HTML length: {len(res.text)}")
+
         soup = BeautifulSoup(res.text, "html.parser")
 
-        for item in soup.select("div.news-item, li, article")[:10]:
-            a_tag = item.select_one("a")
-            if not a_tag:
-                continue
-            title = a_tag.get_text(strip=True)
+        # ORICON ใช้ URL ข่าวรูปแบบ /news/เลขข่าว/
+        all_links = soup.select('a[href^="/news/"]')
+
+        print(f"🔗 ORICON news links: {len(all_links)}")
+
+        for a_tag in all_links:
+            title = a_tag.get_text(" ", strip=True)
             link = a_tag.get("href")
+
             if not title or not link:
                 continue
-            if not link.startswith("http"):
-                link = "https://www.oricon.co.jp" + link
 
+            # เอาเฉพาะ URL ข่าว เช่น /news/2479428/
+            article_id = link.replace("/news/", "").strip("/")
+
+            if not article_id.isdigit():
+                continue
+
+            full_link = "https://www.oricon.co.jp" + link
+
+            # ป้องกันข่าวซ้ำ
+            if full_link in seen_links:
+                continue
+
+            seen_links.add(full_link)
+
+            print(f"📰 ORICON title: {title}")
+
+            # กรอง keyword
             if not any(kw in title for kw in KEYWORDS):
                 continue
 
-            img = item.select_one("img")
-            image = img.get("src") if img else None
+            # ดึงรูป
+            img = a_tag.select_one("img")
+            image = None
+
+            if img:
+                image = (
+                    img.get("src")
+                    or img.get("data-src")
+                    or img.get("data-original")
+                )
 
             news.append({
                 "title": title,
-                "link": link,
+                "link": full_link,
                 "image": image,
                 "source": "oricon"
             })
+
     except Exception as e:
         print("oricon error:", e)
+
+    print(f"✅ ORICON: พบข่าวที่ผ่าน filter {len(news)} ข่าว")
+
     return news
 
 def get_news_from_yahoo():
     news = []
+
     try:
-        url = "https://news.yahoo.co.jp/search?p=BL+ドラマ+OR+実写化+BL&ei=UTF-8"
-        headers = {"User-Agent": "Mozilla/5.0"}
+        url = "https://news.yahoo.co.jp/categories/entertainment"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+
         res = requests.get(url, headers=headers, timeout=15)
+
+        print(f"🌐 Yahoo status: {res.status_code}")
+        print(f"📄 Yahoo HTML length: {len(res.text)}")
+
         soup = BeautifulSoup(res.text, "html.parser")
 
-        for item in soup.select("li, div.newsFeed_item")[:10]:
-            a_tag = item.select_one("a")
-            if not a_tag:
-                continue
-            title = a_tag.get_text(strip=True)
+        # DEBUG: ดูลิงก์ทั้งหมดก่อน
+        all_links = soup.select("a[href]")
+
+        print(f"🔗 Yahoo all links: {len(all_links)}")
+
+        for a_tag in all_links[:50]:
+            title = a_tag.get_text(" ", strip=True)
             link = a_tag.get("href")
-            if not title or not link:
-                continue
 
-            if not any(kw in title for kw in KEYWORDS):
-                continue
+            if title and link:
+                print(f"🔎 Yahoo: {title[:80]} | {link}")
 
-            img = item.select_one("img")
-            image = img.get("src") if img else None
+        return news
 
-            news.append({
-                "title": title,
-                "link": link,
-                "image": image,
-                "source": "Yahoo News"
-            })
     except Exception as e:
         print("yahoo error:", e)
+
     return news
 
 def get_all_news():
