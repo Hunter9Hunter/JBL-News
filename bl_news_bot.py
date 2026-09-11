@@ -230,18 +230,17 @@ def get_news_from_oricon():
 
             # ดึงรูป
             img = a_tag.select_one("img")
-image = None
+            image = None
 
-if img:
-    image = (
-        img.get("src")
-        or img.get("data-src")
-        or img.get("data-original")
-    )
-
-    if image:
-        image = urljoin("https://www.oricon.co.jp", image)
+            if img:
+                image = (
+                    img.get("src")
+                    or img.get("data-src")
+                    or img.get("data-original")
                 )
+
+                if image:
+                    image = urljoin("https://www.oricon.co.jp", image)
 
             news.append({
                 "title": title,
@@ -346,7 +345,7 @@ async def check_news():
         embed.set_footer(text=f"แหล่งข่าว: {news['source']} • BL News Bot")
 
         if news.get("image") and news["image"].startswith(("http://", "https://")):
-    embed.set_image(url=news["image"])
+            embed.set_image(url=news["image"])
 
         await channel.send(embed=embed)
         seen.add(news["link"])
