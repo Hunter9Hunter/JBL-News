@@ -106,47 +106,32 @@ def save_seen(seen):
 # ================== ดึงข่าว ==================
 def get_news_from_modelpress():
     news = []
+
     try:
-        url = "https://mdpr.jp/drama"
+        url = "https://mdpr.jp/drama/"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
 
         res = requests.get(url, headers=headers, timeout=15)
+
+        print(f"🌐 Modelpress status: {res.status_code}")
+        print(f"📄 Modelpress HTML length: {len(res.text)}")
+
         soup = BeautifulSoup(res.text, "html.parser")
 
-        # ดึงลิงก์บทความ Drama ของ Modelpress โดยตรง
-        for a_tag in soup.select('a[href*="/drama/detail/"]'):
+        # ดูลิงก์ที่หน้าเว็บส่งกลับมาจริง ๆ
+        all_links = soup.select("a[href]")
+        print(f"🔗 Modelpress all links: {len(all_links)}")
+
+        for a_tag in all_links[:50]:
             title = a_tag.get_text(" ", strip=True)
             link = a_tag.get("href")
 
-            if not title or not link:
-                continue
+            if title and link:
+                print(f"🔎 {title[:80]} | {link}")
 
-            if not link.startswith("http"):
-                link = "https://mdpr.jp" + link
-
-            # กรองข่าวด้วย KEYWORDS
-            if not any(kw in title for kw in KEYWORDS):
-                continue
-
-            # หารูปจาก <img> ที่อยู่ในลิงก์
-            img = a_tag.select_one("img")
-            image = None
-
-            if img:
-                image = (
-                    img.get("src")
-                    or img.get("data-src")
-                    or img.get("data-original")
-                )
-
-            news.append({
-                "title": title,
-                "link": link,
-                "image": image,
-                "source": "modelpress"
-            })
+        return news
 
     except Exception as e:
         print("modelpress error:", e)
